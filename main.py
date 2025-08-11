@@ -20,7 +20,7 @@ class Product(BaseModel):
     price: int
 
 @app.get("/products", response_model=List[Product])
-def get_products(category: str = None, max_price: float = None):
+def get_products(category: Optional[str] = None, max_price: Optional[float] = None):
     #all products
     filtered_products = products
 
@@ -67,7 +67,7 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     price: Optional[int] = None
 
-@app.patch("/products/{product_id}")
+@app.patch("/products/{product_id}", response_model=Product)
 def patch_product(product_id: int, product: ProductUpdate):
     for p in products:
         if p['product_id'] == product_id:
@@ -146,7 +146,7 @@ class OrderUpdate(BaseModel):
     status: Optional[str] = None
     items: Optional[List[int]] = None
 
-@app.patch("/customers/{customer_id}/orders/{order_id}")
+@app.patch("/customers/{customer_id}/orders/{order_id}", response_model=Order)
 def patch_order(customer_id: int, order_id: int, order: OrderUpdate):
     for o in orders:
         if o['customer_id'] == customer_id and o['id'] == order_id:
