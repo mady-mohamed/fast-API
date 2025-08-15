@@ -1,166 +1,178 @@
+import fastapi
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from fastapi import HTTPException
+from passlib.context import CryptContext
+from datetime import date, datetime, timedelta
+from jose import JWTError, jwt
+from fastapi.security import OAuth2PasswordBearer
+import os
+from dotenv import load_dotenv
+import db
+
+load_dotenv()  # This loads variables from .env file into os.environ
+
+env_vars = {
+    "SECRET_KEY": os.getenv("SECRET_KEY"),
+    "ALGORITHM": os.getenv("ALGORITHM"),
+    "ACCESS_TOKEN_EXPIRE_MINUTES": int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
+}
+
+'''
+FastAPI App
+'''
 app = FastAPI()
 
-# Example product data
-products = [
-    {"product_id": 1, "name": "Laptop", "category": "electronics", "price": 1200},
-    {"product_id": 2, "name": "Headphones", "category": "electronics", "price": 150},
-    {"product_id": 3, "name": "Shirt", "category": "clothing", "price": 30},
-    {"product_id": 4, "name": "Shoes", "category": "clothing", "price": 80},
-    {"product_id": 5, "name": "Coffee Maker", "category": "home", "price": 100}
+
+'''
+Password Authentication Logic
+'''
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() +  (expires_delta or timedelta(minutes= env_vars['ACCESS_TOKEN_EXPIRE_MINUTES']))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, env_vars['SECRET_KEY'], algorithm=env_vars['ALGORITHM'])
+
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def get_current_user(token: str = fastapi.Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, env_vars['SECRET_KEY'], algorithms=env_vars['ALGORITHM'])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        return {"username": username, "role": payload.get("role")}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+def require_role(role: str):
+    def role_checker(current_user: dict = fastapi.Depends(get_current_user)):
+        if current_user["role"] != role:
+            raise HTTPException(status_code=403, detail=f"{role}s only")
+        return current_user
+    return role_checker
+
+
+@app.get("/protected")
+def protected_route(current_user: str = fastapi.Depends(require_role("admin"))):
+    return {"message": f"Hello, {current_user['username']}. You are authorized!"}
+
+@app.get("/admin_only")
+def admin_only_role(user = fastapi.Depends(get_current_user)):
+    return {"message": f"Welcome Admin {user['username']}"}
+
+'''
+User creation and validation
+'''
+
+class User(BaseModel):
+    username: str
+    password: str
+    role: Optional[str] = 'user'
+
+@app.get("/db_users")
+def db_users(current_user: dict = fastapi.Depends(require_role("admin"))):
+    return db.get_users()
+
+
+@app.post("/register")
+def registration(user: User):
+    db.insert_user(user.username, hash_password(user.password), role=user.role)
+    return {"message": "User created"}
+
+
+@app.post("/login")
+def login(user: User):
+    existing_user = db.get_users(user.username)
+    if len(existing_user) < 1:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    user_password_hashed = existing_user[0][2]
+    if verify_password(user.password, user_password_hashed):
+        role = existing_user[0][3]
+        token = create_access_token({"sub": user.username, "role": role})
+        return {"access_token": token, "token_type": "bearer"}
+    raise HTTPException(status_code=401, detail="Invalid username or password")
+
+
+'''
+Creating, Reading, Updating, and Deleting tasks
+'''
+
+tasks = [
+    {"task_id": 1, "name": "Task 1", "progress": "Finished", "sprint": 1, "start_date": date(2000, 1, 1)},
+    {"task_id": 2, "name": "Task 2", "progress": "Working", "sprint": 1, "start_date": date(2000, 1, 1)},
+    {"task_id": 3, "name": "Task 3", "progress": "Pending", "sprint": 1, "start_date": date(2000, 1, 1)}
 ]
 
-class Product(BaseModel):
-    product_id: Optional[int] = None
+class Task(BaseModel):
+    task_id: Optional[int] = None
     name: str
-    category: str
-    price: int
+    progress: str
+    sprint: int
+    start_date: date
 
-@app.get("/products", response_model=List[Product])
-def get_products(category: Optional[str] = None, max_price: Optional[float] = None):
-    #all products
-    filtered_products = products
-
-    if category:
-        temp_list = []
-        for p in filtered_products:
-            if p["category"] == category:
-                temp_list.append(p)
-        filtered_products = temp_list
-
-    if max_price is not None:
-        temp_list = []
-        for p in filtered_products:
-            if p['price'] <= max_price:
-                temp_list.append(p)
-
-        filtered_products = temp_list
-
-    return filtered_products
-
-@app.post('/products', response_model=Product)
-def post_product(product: Product):
-    product_data = product.model_dump()
-    if products:
-        max_id = max(p["product_id"] for p in products if "product_id" in p and p["product_id"] is not None)
-        product_data['product_id'] = max_id + 1
-    else:
-        product_data['product_id'] = 1
-    products.append(product_data)
-    return product_data
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-@app.put("/products/{product_id}", response_model=Product)
-def update_product(product_id: int, product_update: Product):
-    for idx, existing_product in enumerate(products):
-        if existing_product["product_id"] == product_id:
-            updated_product = product_update.model_dump()
-            updated_product["product_id"] = product_id  # Always use path variable, ignore body
-            products[idx] = updated_product
-            return updated_product
-    raise HTTPException(status_code=404, detail="Product not found")
+@app.get("/tasks", response_model=List[Task])
+def get_tasks(sprint: Optional[int] = None, progress: Optional[str] = None):
 
-class ProductUpdate(BaseModel):
+    if sprint is not None and progress is not None:
+        return [t for t in tasks if t["sprint"] == sprint and t["progress"] == progress]
+    elif sprint is not None:
+        return  [t for t in tasks if t["sprint"] == sprint]
+    elif progress is not None:
+        return  [t for t in tasks if t["progress"] == progress]
+    return tasks
+
+@app.post('/tasks', response_model=Task, dependencies=[fastapi.Depends(require_role("admin"))])
+def post_task(task: Task, ):
+    task_data = task.model_dump()
+    task_data['task_id'] = max([t["task_id"] for t in tasks], default=0) + 1
+    tasks.append(task_data)
+    return task_data
+
+
+@app.put("/tasks/{task_id}", response_model=Task, dependencies=[fastapi.Depends(require_role("admin"))])
+def update_task(task_id: int, task_update: Task, ):
+    for idx, existing_task in enumerate(tasks):
+        if existing_task["task_id"] == task_id:
+            updated_task = task_update.model_dump()
+            updated_task["task_id"] = task_id  # Always use path variable, ignore body
+            tasks[idx] = updated_task
+            return updated_task
+    raise HTTPException(status_code=404, detail="Task not found")
+
+class TaskUpdate(BaseModel):
     name: Optional[str] = None
-    price: Optional[int] = None
+    progress: Optional[str] = None
 
-@app.patch("/products/{product_id}", response_model=Product)
-def patch_product(product_id: int, product: ProductUpdate):
-    for p in products:
-        if p['product_id'] == product_id:
-            if product.name is not None:
-                p["name"] = product.name
-            if product.price is not None:
-                p["price"] = product.price
-            return p
-    raise HTTPException(status_code=404, detail='Product Not Found')
+@app.patch("/tasks/{task_id}", response_model=Task)
+def patch_task(task_id: int, task: TaskUpdate):
+    for t in tasks:
+        if t['task_id'] == task_id:
+            if task.name is not None:
+                t["name"] = task.name
+            if task.progress is not None:
+                t["progress"] = task.progress
+            return t
+    raise HTTPException(status_code=404, detail='Task Not Found')
 
-@app.delete("/products/{product_id}")
-def delete_product(product_id: int):
-    for idx, existing_product in enumerate(products):
-        if existing_product["product_id"] == product_id:
-            products.pop(idx)
-            return {"detail": "Product deleted"}
-    raise HTTPException(status_code=404, detail="Product not found")
-
-orders = [
-    {"id": 1, "customer_id": 5, "status": "shipped", "items": [1, 2]},
-    {"id": 2, "customer_id": 5, "status": "pending", "items": [3]},
-    {"id": 3, "customer_id": 7, "status": "shipped", "items": [4, 5]}
-]
-
-class Order(BaseModel):
-    id: Optional[int]
-    customer_id:Optional[int]
-    status:str
-    items:List[int]
-
-@app.get("/customers/orders", response_model=List[Order])
-def get_orders(customer_id: Optional[int] = None, status: Optional[str] = None):
-    f_orders = []
-    if customer_id is None and status is None:
-        return orders
-
-    for o in orders:
-        if o["customer_id"] == customer_id and o["status"] == status:
-            f_orders.append(o)
-        elif o["customer_id"] == customer_id and status == None:
-            f_orders.append(o)
-        elif customer_id == None and o['status'] == status:
-            f_orders.append(o)
-    return f_orders
-
-@app.post("/customers/{customer_id}/orders", response_model=Order)
-def post_order(customer_id: int, order: Order):
-    order_data = order.model_dump()
-    order_data["customer_id"] = customer_id
-    if orders:
-        max_id = max(o["id"] for o in orders if "id" in o and o["id"] is not None)
-        order_data["id"] = max_id + 1
-    else:
-        order_data["id"] = 1
-    orders.append(order_data)
-    return order_data
-
-
-@app.put("/customers/{customer_id}/orders/{order_id}", response_model=Order)
-def update_order(customer_id: int, order_id: int, order_update: Order):
-    for idx, existing_order in enumerate(orders):
-        if existing_order["id"] == order_id and existing_order["customer_id"] == customer_id:
-            # Ensure path customer_id and id match the update data (optional)
-            if order_update.id is not None and order_update.id != order_id:
-                raise HTTPException(status_code=400, detail="Order ID mismatch")
-            if hasattr(order_update, 'customer_id') and getattr(order_update, 'customer_id', None) != customer_id:
-                raise HTTPException(status_code=400, detail="Customer ID mismatch")
-
-            updated_order = order_update.model_dump()
-            updated_order["customer_id"] = customer_id  # Ensure correct customer_id
-            orders[idx] = updated_order
-            return updated_order
-    raise HTTPException(status_code=404, detail="Order not found")
-
-class OrderUpdate(BaseModel):
-    status: Optional[str] = None
-    items: Optional[List[int]] = None
-
-@app.patch("/customers/{customer_id}/orders/{order_id}", response_model=Order)
-def patch_order(customer_id: int, order_id: int, order: OrderUpdate):
-    for o in orders:
-        if o['customer_id'] == customer_id and o['id'] == order_id:
-            if order.status is not None:
-                o['status'] = order.status
-            if order.items is not None:
-                o['items'] = order.items
-            return o
-    raise HTTPException(status_code=404, detail="Order not found")
-
-@app.delete("/customers/{customer_id}/orders/{order_id}")
-def delete_order(customer_id: int, order_id: int):
-    for idx, existing_order in enumerate(orders):
-        if existing_order["id"] == order_id and existing_order["customer_id"] == customer_id:
-            orders.pop(idx)
-            return {"detail": "Order deleted"}
-    raise HTTPException(status_code=404, detail="Order not found")
+@app.delete("/tasks/{task_id}", dependencies=[fastapi.Depends(require_role("admin"))])
+def delete_task(task_id: int):
+    for idx, existing_task in enumerate(tasks):
+        if existing_task["task_id"] == task_id:
+            tasks.pop(idx)
+            return {"detail": "Task deleted"}
+    raise HTTPException(status_code=404, detail="Task not found")
