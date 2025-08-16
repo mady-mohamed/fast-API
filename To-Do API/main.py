@@ -69,7 +69,7 @@ def protected_route(current_user: str = fastapi.Depends(require_role("admin"))):
     return {"message": f"Hello, {current_user['username']}. You are authorized!"}
 
 @app.get("/admin_only")
-def admin_only_role(user = fastapi.Depends(get_current_user)):
+def admin_only_role(user = fastapi.Depends(require_role("admin"))):
     return {"message": f"Welcome Admin {user['username']}"}
 
 '''
@@ -83,7 +83,17 @@ class User(BaseModel):
 
 @app.get("/db_users")
 def db_users(current_user: dict = fastapi.Depends(require_role("admin"))):
-    return db.get_users()
+    result = db.get_users()
+    user = [
+        {
+            "user_id": r.id,
+            "username": r.name,
+            "password": r.password,
+            "role": r.role
+        }
+        for r in result
+    ]
+    return user
 
 
 @app.post("/register")
@@ -126,53 +136,43 @@ class Task(BaseModel):
 
 
 @app.get("/tasks", response_model=List[Task])
-def get_tasks(sprint: Optional[int] = None, progress: Optional[str] = None):
-
-    if sprint is not None and progress is not None:
-        return [t for t in tasks if t["sprint"] == sprint and t["progress"] == progress]
-    elif sprint is not None:
-        return  [t for t in tasks if t["sprint"] == sprint]
-    elif progress is not None:
-        return  [t for t in tasks if t["progress"] == progress]
+def get_tasks(name: str = None, sprint: Optional[int] = None, progress: Optional[str] = None):
+    result = db.get_tasks(name, sprint, progress)
+    tasks = [
+        {
+            "task_id": r.id,
+            "name": r.name,
+            "progress": r.progress,
+            "sprint": r.sprint,
+            "start_date": r.start_date
+        }
+        for r in result
+    ]
     return tasks
 
-@app.post('/tasks', response_model=Task, dependencies=[fastapi.Depends(require_role("admin"))])
-def post_task(task: Task, ):
-    task_data = task.model_dump()
-    task_data['task_id'] = max([t["task_id"] for t in tasks], default=0) + 1
-    tasks.append(task_data)
-    return task_data
+@app.post('/tasks', dependencies=[fastapi.Depends(require_role("admin"))])
+def post_task(task: Task):
+    db.insert_task(task.name, task.progress, task.sprint, task.start_date)
+    return {"message": "Task created"}
 
 
 @app.put("/tasks/{task_id}", response_model=Task, dependencies=[fastapi.Depends(require_role("admin"))])
-def update_task(task_id: int, task_update: Task, ):
-    for idx, existing_task in enumerate(tasks):
-        if existing_task["task_id"] == task_id:
-            updated_task = task_update.model_dump()
-            updated_task["task_id"] = task_id  # Always use path variable, ignore body
-            tasks[idx] = updated_task
-            return updated_task
-    raise HTTPException(status_code=404, detail="Task not found")
-
-class TaskUpdate(BaseModel):
-    name: Optional[str] = None
-    progress: Optional[str] = None
-
-@app.patch("/tasks/{task_id}", response_model=Task)
-def patch_task(task_id: int, task: TaskUpdate):
-    for t in tasks:
-        if t['task_id'] == task_id:
-            if task.name is not None:
-                t["name"] = task.name
-            if task.progress is not None:
-                t["progress"] = task.progress
-            return t
-    raise HTTPException(status_code=404, detail='Task Not Found')
+def update_task(task_id: int, task_update: Task):
+    try:
+        db.update_task(task_id, task_update.name, task_update.progress, task_update.sprint)
+        return {  # echo back the update
+            "task_id": task_id,
+            "name": task_update.name,
+            "progress": task_update.progress,
+            "sprint": task_update.sprint,
+            "start_date": task_update.start_date
+        }
+    except:
+        raise HTTPException(status_code=404, detail="Task not found")
 
 @app.delete("/tasks/{task_id}", dependencies=[fastapi.Depends(require_role("admin"))])
 def delete_task(task_id: int):
-    for idx, existing_task in enumerate(tasks):
-        if existing_task["task_id"] == task_id:
-            tasks.pop(idx)
-            return {"detail": "Task deleted"}
-    raise HTTPException(status_code=404, detail="Task not found")
+    try:
+        db.delete_task(task_id)
+    except:
+        raise HTTPException(status_code=404, detail="Task not found")
