@@ -1,15 +1,21 @@
 import fastapi
-from fastapi import FastAPI
+from fastapi import FastAPI, Query, Security, Depends
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from fastapi import HTTPException
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from datetime import date, datetime, timedelta
 from jose import JWTError, jwt
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import os
 from dotenv import load_dotenv
 import db
+from enum import Enum
+'''
+Upgrades
+1. Async functions
+'''
 
 load_dotenv()  # This loads variables from .env file into os.environ
 
@@ -42,13 +48,25 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except UnknownHashError:
+        print("Error - hash is unrecognizable: UnknownHashError")
+        return False
+    except Exception as e:
+        # Optional: Log other potential errors from passlib for debugging
+        print(f"An unexpected error occurred during password verification: {e}")
+        return False
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-def get_current_user(token: str = fastapi.Depends(oauth2_scheme)):
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    token_q: str = Query(None, alias="token")
+):
+    token = token_q or token  # prefer query token if provided
     try:
-        payload = jwt.decode(token, env_vars['SECRET_KEY'], algorithms=env_vars['ALGORITHM'])
+        payload = jwt.decode(token, env_vars['SECRET_KEY'], algorithms=[env_vars['ALGORITHM']])
         username: str = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -63,6 +81,7 @@ def require_role(role: str):
         return current_user
     return role_checker
 
+# def create_query_token
 
 @app.get("/protected")
 def protected_route(current_user: str = fastapi.Depends(require_role("admin"))):
@@ -83,17 +102,12 @@ class User(BaseModel):
 
 @app.get("/db_users")
 def db_users(current_user: dict = fastapi.Depends(require_role("admin"))):
-    result = db.get_users()
-    user = [
-        {
-            "user_id": r.id,
-            "username": r.name,
-            "password": r.password,
-            "role": r.role
-        }
-        for r in result
-    ]
-    return user
+    return db.get_users()
+
+@app.get("/user")
+def db_user(id: int, current_user: dict = fastapi.Depends(require_role("admin"))):
+    result = db.get_users(id)
+    return result
 
 
 @app.post("/register")
@@ -103,37 +117,82 @@ def registration(user: User):
 
 
 @app.post("/login")
-def login(user: User):
-    existing_user = db.get_users(user.username)
-    if len(existing_user) < 1:
+def login(requests_form = Depends(OAuth2PasswordRequestForm)):
+    # Access Pydantic model attributes using dot notation
+    user_info = db.get_users(name=str(requests_form.username))
+
+    if not user_info:
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    user_password_hashed = existing_user[0][2]
-    if verify_password(user.password, user_password_hashed):
-        role = existing_user[0][3]
-        token = create_access_token({"sub": user.username, "role": role})
+
+    # Access Pydantic model attributes using dot notation
+    if verify_password(requests_form.password, user_info['password']):
+        # Use user.username for creating the token
+        token = create_access_token({"sub": str(requests_form.username), "role": user_info['role']})
         return {"access_token": token, "token_type": "bearer"}
+
     raise HTTPException(status_code=401, detail="Invalid username or password")
 
+class UserProfile(BaseModel):
+    username: str
+    role: str
+
+@app.get("/me", response_model=UserProfile)
+def get_user_role(current_user: dict = fastapi.Depends(get_current_user)):
+    return current_user
+
+class UserUpdate(BaseModel):
+    role: str = None
+    name: str = None
+    password: str = None
+
+@app.put("/users/{user_id}", dependencies=[Depends(require_role("admin"))])
+def update_user(user_id:int, user_update: UserUpdate):
+    try:
+        cont = {}
+        if user_update.role is not None:
+            cont["role"] = user_update.role
+        if user_update.name is not None:
+            cont["name"] = user_update.name
+        if user_update.password is not None:
+            cont["password"] = hash_password(user_update.password)
+
+        updated = db.update_user(user_id, cont)
+        if not updated:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"message": "User updated"}
+    except:
+        raise HTTPException(status_code=404, detail="User not found")
+
+@app.delete("/users/{user_id}", dependencies=[Depends(require_role("admin"))])
+def delete_user(user_id: int):
+    if not db.delete_user(user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted"}
 
 '''
 Creating, Reading, Updating, and Deleting tasks
 '''
 
-tasks = [
-    {"task_id": 1, "name": "Task 1", "progress": "Finished", "sprint": 1, "start_date": date(2000, 1, 1)},
-    {"task_id": 2, "name": "Task 2", "progress": "Working", "sprint": 1, "start_date": date(2000, 1, 1)},
-    {"task_id": 3, "name": "Task 3", "progress": "Pending", "sprint": 1, "start_date": date(2000, 1, 1)}
-]
+class TaskProgress(str, Enum):
+    todo = "todo"
+    in_progress = "in-progress"
+    done = "done"
 
 class Task(BaseModel):
     task_id: Optional[int] = None
     name: str
-    progress: str
+    progress: TaskProgress
     sprint: int
-    start_date: date
+    start_date: Optional[datetime] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+@app.get("/tasks/{task_id}", response_model=Task)
+def get_task(task_id: int, current_user: dict = fastapi.Depends(get_current_user)):
+    task = db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
 @app.get("/tasks", response_model=List[Task])
 def get_tasks(name: str = None, sprint: Optional[int] = None, progress: Optional[str] = None):
@@ -152,14 +211,17 @@ def get_tasks(name: str = None, sprint: Optional[int] = None, progress: Optional
 
 @app.post('/tasks', dependencies=[fastapi.Depends(require_role("admin"))])
 def post_task(task: Task):
-    db.insert_task(task.name, task.progress, task.sprint, task.start_date)
+    start_date = task.start_date
+    if task.start_date is None:
+        start_date = datetime.utcnow()
+    db.insert_task(task.name, task.progress, task.sprint, start_date)
     return {"message": "Task created"}
-
 
 @app.put("/tasks/{task_id}", response_model=Task, dependencies=[fastapi.Depends(require_role("admin"))])
 def update_task(task_id: int, task_update: Task):
     try:
-        db.update_task(task_id, task_update.name, task_update.progress, task_update.sprint)
+        updated = db.update_task(task_id, task_update.name, task_update.progress, task_update.sprint)
+        if not updated: raise HTTPException(status_code=404, detail="Task not found")
         return {  # echo back the update
             "task_id": task_id,
             "name": task_update.name,
