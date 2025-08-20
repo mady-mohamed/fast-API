@@ -1,0 +1,13 @@
+.idea/.gitignore
+.idea/fast-API.iml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/inspectionProfiles/profiles_settings.xml
+.env
+.vscode/settings.json
+To-Do API/TaskAPI.postman_collection.json
+To-Do API/test.db
+To-Do API/users.postman_collection.json
+To-Do API/__pycache__/db.cpython-310.pyc
+To-Do API/__pycache__/main.cpython-310.pyc
