@@ -2,6 +2,7 @@ import sqlalchemy as sa
 import glob
 from datetime import datetime
 from fastapi import Query
+from sqlalchemy.ext.asyncio import create_async_engine
 # Database Implementation
 
 db_file = "test.db"
