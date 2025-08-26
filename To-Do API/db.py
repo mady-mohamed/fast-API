@@ -14,9 +14,6 @@ db_path = glob.glob(f"*{db_file}")
 DATABASE_URL = f"sqlite:///./{db_file}"
 db_async_url = f"sqlite+aiosqlite:///./{db_file}"
 
-# engine = sa.create_engine(DATABASE_URL)
-
-
 metadata = sa.MetaData()
 
 user_table = sa.Table(
@@ -115,7 +112,6 @@ async def get_tasks(name: str = None, sprint: int = None, progress: str = None):
 
 async def update_task(id: int, name: str = None, progress: str = None, sprint: int = None):
     async with engine.begin() as conn:
-    
         cont = {}
         if name is not None:
             cont['name'] = name
