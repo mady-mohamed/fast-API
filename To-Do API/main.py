@@ -1,6 +1,5 @@
 import fastapi, glob
 from fastapi import FastAPI, Depends
-from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from fastapi import HTTPException
 from datetime import datetime
@@ -43,10 +42,7 @@ async def admin_only_role(user = fastapi.Depends(require_role("admin"))):
 User creation and validation
 '''
 
-class User(BaseModel):
-    username: str
-    password: str
-    role: Optional[str] = 'user'
+
 
 # This route calls an async function
 @app.get("/db_users")
@@ -80,18 +76,12 @@ async def login(requests_form = Depends(OAuth2PasswordRequestForm)):
 
     raise HTTPException(status_code=401, detail="Invalid username or password")
 
-class UserProfile(BaseModel):
-    username: str
-    role: str
+
 
 @app.get("/me", response_model=UserProfile)
 async def get_user_role(current_user: dict = fastapi.Depends(get_current_user)):
     return current_user
 
-class UserUpdate(BaseModel):
-    role: str = None
-    name: str = None
-    password: str = None
 
 # This route calls an async function
 @app.put("/users/{user_id}", dependencies=[Depends(require_role("admin"))])
@@ -128,14 +118,7 @@ class TaskProgress(str, Enum):
     in_progress = "in-progress"
     done = "done"
 
-class Task(BaseModel):
-    task_id: Optional[int] = None
-    name: str
-    progress: TaskProgress
-    sprint: int
-    start_date: Optional[datetime] = None
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 # This route calls an async function
 @app.get("/tasks/{task_id}", response_model=Task)
