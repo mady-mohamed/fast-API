@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 fastapi
 uvicorn
 SQLAlchemy
 python-multipart
 python-dotenv
 pydantic
+=======
+fastapi==0.116.1
+uvicorn==0.35.0
+python-dotenv~=1.1.1
+>>>>>>> acb66af4bd347b565b79e4f6cd07e69b54a14261
