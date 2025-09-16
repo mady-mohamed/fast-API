@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, TypeVar, Generic, Any
 from datetime import datetime
 from enum import Enum
 
@@ -16,7 +16,20 @@ class UserBase(BaseModel):
     bio: Optional[str]
 
 class UserCreate(UserBase):
-    password: str   # raw password for registration
+    password: str   # hash password later for registration (only at creation)
+    
+T = TypeVar("T", bound=UserBase)
+
+class OptionalUModel(UserBase, Generic[T]):
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        for field_name, field in cls.model_fields.items():
+            field.annotation = Optional[field.annotation]
+            field.default = None
+            
+class UserUpdate(OptionalUModel[UserBase]):
+    pass
 
 class UserResponse(UserBase):
     id: int
@@ -32,6 +45,19 @@ class PostBase(BaseModel):
     slug: str
     content: str
     status: PostStatus
+    
+T = TypeVar("T", bound=PostBase)
+
+class OptionalPModel(PostBase, Generic[T]):
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        for field_name, field in cls.model_fields.items():
+            field.annotation = Optional[field.annotation]
+            field.default = None
+            
+class PostUpdate(OptionalPModel[PostBase]):
+    pass
 
 class PostCreate(PostBase):
     pass
@@ -61,14 +87,26 @@ class CommentResponse(CommentBase):
         orm_mode = True
 
 # Category & Tag
-class CategoryResponse(BaseModel):
+class CategoryBase(BaseModel):
+    name: str
+
+class CategoryCreate(CategoryBase):
+    pass
+
+class CategoryResponse(CategoryBase):
     id: int
     name: str
     slug: str
     class Config:
         orm_mode = True
 
-class TagResponse(BaseModel):
+class TagBase(BaseModel):
+    name: str
+
+class TagCreate(TagBase):
+    pass
+
+class TagResponse(TagBase):
     id: int
     name: str
     class Config:
