@@ -1,15 +1,18 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from schemas import PostUpdate, PostCreate 
 from schemas import UserCreate,  UserUpdate
 from schemas import CommentCreate, CommentUpdate
 from schemas import CategoryUpdate, CategoryCreate
 from schemas import TagUpdate, TagCreate
+from models import User
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from crud import get_users, get_user, insert_user, update_user, delete_user
 from crud import get_post, get_posts, insert_post, update_post, delete_post
 from crud import get_comments, get_comment, insert_comment, update_comment, delete_comment
 from crud import get_categories, get_category, insert_category, update_category, delete_category
 from crud import get_tags, get_tag, insert_tag, update_tag, delete_tag
+from auth import verify_password, create_access_token, hash_password
 
 from database import get_db
 
@@ -18,13 +21,30 @@ app = FastAPI(title="Blog API")
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Blog API"}
+
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = get_user(db, form_data.username)
+    if not verify_password(form_data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    access_token = create_access_token(
+        data={"sub": user.username, "role": "admin" if user.is_admin else "user"}
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
 '''
 Users Endpoints
 '''
 @app.post("/users/")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    success_id = insert_user(db, user)
-    return {"message": f"User #{success_id} created"}
+    user_dict = user.model_dump(exclude_unset=True)
+    user_dict["password_hash"] = hash_password(user_dict.pop("password"))  # hash before saving
+    new_user = User(**user_dict)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": f"User #{new_user.id} created"}
 @app.get("/users/{username}")
 def get_single_user(username: str, db: Session = Depends(get_db)):
     return get_user(db, username)
