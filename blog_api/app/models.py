@@ -57,6 +57,7 @@ class Comment(Base):
     author_id = Column(Integer, ForeignKey("users.id"))
     post_id = Column(Integer, ForeignKey("posts.id"))
 
+    author = relationship("User", back_populates="comments")
     post = relationship("Post", back_populates="comments")
 
 class Category(Base):

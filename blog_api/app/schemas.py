@@ -3,6 +3,10 @@ from typing import Optional, TypeVar, Generic, Any
 from datetime import datetime
 from enum import Enum
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
 class PostStatus(str, Enum):
     draft = "draft"
     published = "published"
@@ -77,7 +81,8 @@ class CommentBase(BaseModel):
     content: str
 
 class CommentCreate(CommentBase):
-    pass
+    author_id: int
+    post_id: int
 
 T = TypeVar("T", bound=CommentBase)
 
@@ -95,8 +100,6 @@ class CommentUpdate(OptionalCModel[CommentBase]):
 class CommentResponse(CommentBase):
     id: int
     created_at: datetime
-    author_id: int
-    post_id: int
 
     class Config:
         orm_mode = True
@@ -104,6 +107,7 @@ class CommentResponse(CommentBase):
 # Category & Tag
 class CategoryBase(BaseModel):
     name: str
+    slug: str
 
 class CategoryCreate(CategoryBase):
     pass
@@ -124,7 +128,6 @@ class CategoryUpdate(OptionalcModel[CategoryBase]):
 class CategoryResponse(CategoryBase):
     id: int
     name: str
-    slug: str
     class Config:
         orm_mode = True
 

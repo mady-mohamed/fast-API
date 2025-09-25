@@ -5,6 +5,7 @@ from schemas import UserCreate,  UserUpdate
 from schemas import CommentCreate, CommentUpdate
 from schemas import CategoryUpdate, CategoryCreate
 from schemas import TagUpdate, TagCreate
+from schemas import Token
 from models import User
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from crud import get_users, get_user, insert_user, update_user, delete_user
@@ -12,7 +13,8 @@ from crud import get_post, get_posts, insert_post, update_post, delete_post
 from crud import get_comments, get_comment, insert_comment, update_comment, delete_comment
 from crud import get_categories, get_category, insert_category, update_category, delete_category
 from crud import get_tags, get_tag, insert_tag, update_tag, delete_tag
-from auth import verify_password, create_access_token, hash_password
+from auth import verify_password, create_access_token, hash_password, get_current_user, require_admin
+
 
 from database import get_db
 
@@ -22,7 +24,7 @@ app = FastAPI(title="Blog API")
 def read_root():
     return {"message": "Welcome to Blog API"}
 
-@app.post("/login")
+@app.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = get_user(db, form_data.username)
     if not verify_password(form_data.password, user.password_hash):
@@ -36,6 +38,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 '''
 Users Endpoints
 '''
+
 @app.post("/users/")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     user_dict = user.model_dump(exclude_unset=True)
@@ -64,8 +67,10 @@ def list_users(db: Session = Depends(get_db)):
 '''
 Posts Endpoints
 '''
+
 @app.post("/posts/")
-def create_post(post: PostCreate, db: Session = Depends(get_db)):
+def create_post(post: PostCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    post.author_id = current_user.id
     success_id = insert_post(db, post)
     return {"message": f"Post #{success_id} created"}
 @app.get("/posts/{post_id}")
@@ -125,7 +130,7 @@ def change_category_data(category_id: int, update: CategoryUpdate, db: Session =
     else:
         return {"message": f"Category #{category_id} has not been found"}
 @app.delete("/categories/{category_id}")
-def remove_category(category_id: int, db: Session = Depends(get_db)):
+def remove_category(category_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     return delete_category(db, category_id)
 @app.get("/categories/")
 def list_categories(db: Session = Depends(get_db)):
