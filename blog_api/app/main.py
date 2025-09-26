@@ -1,13 +1,14 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from schemas import PostUpdate, PostCreate 
-from schemas import UserCreate,  UserUpdate
-from schemas import CommentCreate, CommentUpdate
-from schemas import CategoryUpdate, CategoryCreate
-from schemas import TagUpdate, TagCreate
+from schemas import PostUpdate, PostCreate, PostResponse
+from schemas import UserCreate,  UserUpdate, UserResponse
+from schemas import CommentCreate, CommentUpdate, CommentResponse
+from schemas import CategoryUpdate, CategoryCreate, CategoryResponse
+from schemas import TagUpdate, TagCreate, TagResponse
 from schemas import Token
 from models import User
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from slugify import slugify
 from crud import get_users, get_user, insert_user, update_user, delete_user
 from crud import get_post, get_posts, insert_post, update_post, delete_post
 from crud import get_comments, get_comment, insert_comment, update_comment, delete_comment
@@ -48,7 +49,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     return {"message": f"User #{new_user.id} created"}
-@app.get("/users/{username}")
+@app.get("/users/{username}", response_model=UserResponse)
 def get_single_user(username: str, db: Session = Depends(get_db)):
     return get_user(db, username)
 @app.put("/users/{username}")
@@ -61,19 +62,28 @@ def change_user_data(username: str, update: UserUpdate, db: Session = Depends(ge
 @app.delete("/users/{username}")
 def remove_user(username: str, db: Session = Depends(get_db)):
     return delete_user(db, username)
-@app.get("/users/")
+@app.get("/users/", response_model=UserResponse)
 def list_users(db: Session = Depends(get_db)):
     return get_users(db)
+
+@app.get("/me", response_model=UserResponse)
+def get_user_role(current_user: dict = Depends(get_current_user)):
+    return current_user
 '''
 Posts Endpoints
 '''
-
 @app.post("/posts/")
 def create_post(post: PostCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post.author_id = current_user.id
-    success_id = insert_post(db, post)
-    return {"message": f"Post #{success_id} created"}
-@app.get("/posts/{post_id}")
+    new_post = insert_post(db, post)
+    original_slug = post.slug if post.slug else slugify(post.title)
+    unique_slug = f"{original_slug}-{new_post.id}"
+    update_data = PostUpdate(slug=unique_slug)
+    update_post(db, new_post.id, update_data)
+    db.commit()
+    return {"message": f"Post #{new_post.id} created"}
+
+@app.get("/posts/{post_id}", response_model=PostResponse)
 def get_single_post(post_id: int, db: Session = Depends(get_db)):
     return get_post(db, post_id)
 @app.put("/posts/{post_id}")
@@ -86,7 +96,7 @@ def change_post_data(post_id: int, update: PostUpdate, db: Session = Depends(get
 @app.delete("/posts/{post_id}")
 def remove_post(post_id: int, db: Session = Depends(get_db)):
     return delete_post(db, post_id)
-@app.get("/posts/")
+@app.get("/posts/", response_model=PostResponse)
 def list_posts(db: Session = Depends(get_db)):
     return get_posts(db)
 '''
@@ -96,7 +106,7 @@ Comments Endpoints
 def create_comment(comment: CommentCreate, db: Session = Depends(get_db)):
     success_id = insert_comment(db, comment)
     return {"message": f"Comment #{success_id} created"}
-@app.get("/comments/{comment_id}")
+@app.get("/comments/{comment_id}", response_model=CommentResponse)
 def get_single_comment(comment_id: int, db: Session = Depends(get_db)):
     return get_comment(db, comment_id)
 @app.put("/comments/{comment_id}")
@@ -109,7 +119,7 @@ def change_comment_data(comment_id: int, update: CommentUpdate, db: Session = De
 @app.delete("/comments/{comment_id}")
 def remove_comment(comment_id: int, db: Session = Depends(get_db)):
     return delete_comment(db, comment_id)
-@app.get("/comments/")
+@app.get("/comments/", response_model=CommentResponse)
 def list_comments(db: Session = Depends(get_db)):
     return get_comments(db)
 '''
@@ -117,9 +127,14 @@ Categories Endpoints
 '''
 @app.post("/categories/")
 def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
-    success_id = insert_category(db, category)
-    return {"message": f"Category #{success_id} created"}
-@app.get("/categories/{category_id}")
+    new_category = insert_category(db, category)
+    original_slug = category.slug if category.slug else slugify(category.name)
+    unique_slug = f"{original_slug}-{new_category.id}"
+    update_data = CategoryUpdate(slug=unique_slug)
+    update_category(db, new_category.id, update_data)
+    db.commit()
+    return {"message": f"Category #{new_category.id} created"}
+@app.get("/categories/{category_id}", response_model=CategoryResponse)
 def get_single_category(category_id: int, db: Session = Depends(get_db)):
     return get_category(db, category_id)
 @app.put("/categories/{category_id}")
@@ -132,7 +147,7 @@ def change_category_data(category_id: int, update: CategoryUpdate, db: Session =
 @app.delete("/categories/{category_id}")
 def remove_category(category_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     return delete_category(db, category_id)
-@app.get("/categories/")
+@app.get("/categories/", response_model=CategoryResponse)
 def list_categories(db: Session = Depends(get_db)):
     return get_categories(db)
 '''
@@ -142,7 +157,7 @@ Tags Endpoints
 def create_tag(tag: TagCreate, db: Session = Depends(get_db)):
     success_id = insert_tag(db, tag)
     return {"message": f"Tag #{success_id} created"}
-@app.get("/tags/{tag_id}")
+@app.get("/tags/{tag_id}", response_model=TagResponse)
 def get_single_tag(tag_id: int, db: Session = Depends(get_db)):
     return get_tag(db, tag_id)
 @app.put("/tags/{tag_id}")
@@ -155,6 +170,6 @@ def change_tag_data(tag_id: int, update: TagUpdate, db: Session = Depends(get_db
 @app.delete("/tags/{tag_id}")
 def remove_tag(tag_id: int, db: Session = Depends(get_db)):
     return delete_tag(db, tag_id)
-@app.get("/tags/")
+@app.get("/tags/", response_model=TagResponse)
 def list_tags(db: Session = Depends(get_db)):
     return get_tags(db)

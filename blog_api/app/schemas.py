@@ -46,7 +46,7 @@ class UserResponse(UserBase):
 # Post schemas
 class PostBase(BaseModel):
     title: str
-    slug: str
+    slug: Optional[str]
     content: str
     status: PostStatus
     category_id: int
@@ -107,7 +107,7 @@ class CommentResponse(CommentBase):
 # Category & Tag
 class CategoryBase(BaseModel):
     name: str
-    slug: str
+    slug: Optional[str]
 
 class CategoryCreate(CategoryBase):
     pass
