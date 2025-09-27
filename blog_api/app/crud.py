@@ -3,8 +3,8 @@ from sqlalchemy import select, delete
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
-from schemas import UserCreate, UserUpdate, PostCreate, PostUpdate, CommentCreate, CommentUpdate, CategoryCreate, CategoryUpdate, TagCreate, TagUpdate
-from typing import TypeVar
+from schemas import UserCreate, UserUpdate, PostCreate, PostUpdate, PostStatus, CommentCreate, CommentUpdate, CategoryCreate, CategoryUpdate, TagCreate, TagUpdate
+from typing import TypeVar, Optional
 
 '''
 Users CRUD
@@ -55,8 +55,11 @@ def delete_user(db: Session, username: str):
 Posts CRUD
 '''
 
-def get_posts(db: Session):
+def get_posts(db: Session, skip: int = 0, limit: int = 10, status: Optional[PostStatus] = None):
     stmt = select(Post)
+    if status:
+        stmt = stmt.where(Post.status == status) 
+    stmt = stmt.offset(skip).limit(limit) 
     result = db.execute(stmt)
     return result.scalars().all()
 

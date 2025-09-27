@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from schemas import PostUpdate, PostCreate, PostResponse
+from schemas import PostUpdate, PostCreate, PostResponse, PostStatus
 from schemas import UserCreate,  UserUpdate, UserResponse
 from schemas import CommentCreate, CommentUpdate, CommentResponse
 from schemas import CategoryUpdate, CategoryCreate, CategoryResponse
@@ -9,6 +9,7 @@ from schemas import Token
 from models import User
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from slugify import slugify
+from typing import Optional
 from crud import get_users, get_user, insert_user, update_user, delete_user
 from crud import get_post, get_posts, insert_post, update_post, delete_post
 from crud import get_comments, get_comment, insert_comment, update_comment, delete_comment
@@ -96,9 +97,18 @@ def change_post_data(post_id: int, update: PostUpdate, db: Session = Depends(get
 @app.delete("/posts/{post_id}")
 def remove_post(post_id: int, db: Session = Depends(get_db)):
     return delete_post(db, post_id)
-@app.get("/posts/", response_model=PostResponse)
-def list_posts(db: Session = Depends(get_db)):
-    return get_posts(db)
+# @app.get("/posts/", response_model=list[PostResponse])
+# def list_posts(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+#     return get_posts(db, skip=skip, limit=limit)
+@app.get("/posts/", response_model=list[PostResponse])
+def list_posts(
+    skip: int = 0, 
+    limit: int = 10, 
+    status: Optional[PostStatus] = None, # New optional filter
+    db: Session = Depends(get_db)
+):
+    # Pass the new status parameter to the CRUD function
+    return get_posts(db, skip=skip, limit=limit, status=status)
 '''
 Comments Endpoints
 '''
