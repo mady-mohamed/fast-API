@@ -19,9 +19,7 @@ def insert_user(db: Session, user: UserCreate):
     new_user = User(**user.model_dump(exclude_unset=True))
     db.add(new_user)
     db.flush()
-    db.commit()
-    return new_user.id
-
+    return new_user
 
 def get_user(db: Session, username: str) -> User:
     stmt = select(User).where(User.username == username)
@@ -38,18 +36,13 @@ def update_user(db: Session, username: str, user_update:UserUpdate):
     for col in updt:
         setattr(user, col, updt[col])
     db.flush()
-    db.commit()
-    return True
+    return user
 
-def delete_user(db: Session, username: str):
-    stmt = delete(User).where(User.username == username)
-    result = db.execute(stmt)
+def delete_user(db: Session, username: str) -> User:
+    user_to_delete = get_user(db, username)
+    db.delete(user_to_delete)
     db.flush()
-    db.commit()
-    if result.rowcount > 0:
-        return {"message": f"user with '{username}' has been deleted"}
-    else:
-        raise HTTPException(status_code= 404,detail=f"User with username '{username}' not found.")
+    return user_to_delete
     
 '''
 Posts CRUD
@@ -85,18 +78,13 @@ def update_post(db: Session, post_id: int, post_update: PostUpdate):
     for col in updt:
         setattr(post, col, updt[col])
     db.flush()
-    db.commit()
-    return True
+    return post
     
 def delete_post(db: Session, post_id: int):
-    stmt = delete(Post).where(Post.id == post_id)
-    result = db.execute(stmt)
+    post_to_delete = get_post(db, post_id)
+    db.delete(post_to_delete)
     db.flush()
-    db.commit()
-    if result.rowcount > 0:
-        return {"message": f"post with ID: #{post_id} has been deleted"}
-    else:
-        raise HTTPException(status_code=404, detail=f"Post not found with ID:{post_id}")
+    return post_to_delete
     
 '''
 Comments CRUD
@@ -121,8 +109,7 @@ def insert_comment(db: Session, comment: CommentCreate):
     new_comment = Comment(**comment.model_dump(exclude_unset=True))
     db.add(new_comment)
     db.flush()
-    db.commit()
-    return new_comment.id
+    return new_comment
 
 def update_comment(db: Session, comment_id: int, comment_update: CommentUpdate):
     comment = get_comment(db, comment_id)
@@ -130,18 +117,14 @@ def update_comment(db: Session, comment_id: int, comment_update: CommentUpdate):
     for col in updt:
         setattr(comment, col, updt[col])
     db.flush()
-    db.commit()
-    return True
+    
+    return comment
     
 def delete_comment(db: Session, comment_id: int):
-    stmt = delete(Comment).where(Comment.id == comment_id)
-    result = db.execute(stmt)
+    comment_to_delete = get_comment(db, comment_id)
+    db.delete(comment_to_delete)
     db.flush()
-    db.commit()
-    if result.rowcount > 0:
-        return {"message": f"comment with ID: #{comment_id} has been deleted"}
-    else:
-        raise HTTPException(status_code=404, detail=f"Comment not found ID:{comment_id}")
+    return comment_to_delete
     
 '''
 Categories CRUD
@@ -171,17 +154,13 @@ def update_category(db: Session, category_id: int, category_update: CategoryUpda
     for col in updt:
         setattr(category, col, updt[col])
     db.flush()
-    db.commit()
-    return True
+    
+    return category
 def delete_category(db: Session, category_id: int):
-    stmt = delete(Category).where(Category.id == category_id)
-    result = db.execute(stmt)
+    category_to_delete = get_category(db, category_id)
+    db.delete(category_to_delete)
     db.flush()
-    db.commit()
-    if result.rowcount > 0:
-        return {"message": f"category with ID: #{category_id} has been deleted"}
-    else:
-        raise HTTPException(status_code=404, detail=f"category with ID: #{category_id} not found.")
+    return category_to_delete
     
 '''
 Tags CRUD
@@ -204,22 +183,16 @@ def insert_tag(db: Session, tag: TagCreate):
     new_tag = Tag(**tag.model_dump(exclude_unset=True))
     db.add(new_tag)
     db.flush()
-    db.commit()
-    return new_tag.id
+    return new_tag
 def update_tag(db: Session, tag_id: int, tag_update: TagUpdate):
     tag = get_tag(db, tag_id)
     updt = tag_update.model_dump(exclude_unset=True)
     for col in updt:
         setattr(tag, col, updt[col])
     db.flush()
-    db.commit()
-    return True
+    return tag
 def delete_tag(db: Session, tag_id: int):
-    stmt = delete(Tag).where(Tag.id == tag_id)
-    result = db.execute(stmt)
+    tag_to_delete = get_tag(db, tag_id)
+    db.delete(tag_to_delete)
     db.flush()
-    db.commit()
-    if result.rowcount > 0:
-        return {"message": f"tag with ID: #{tag_id} has been deleted"}
-    else:
-        raise HTTPException(status_code=404, detail=f"tag with ID: #{tag_id} not found.")
+    return tag_to_delete

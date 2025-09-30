@@ -36,10 +36,11 @@ class Post(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    slug = Column(String, unique=True, nullable=False)
+    slug = Column(String, unique=True, nullable=True)
     content = Column(Text, nullable=False)
     status = Column(Enum(PostStatus), default=PostStatus.draft)
     publication_date = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     author_id = Column(Integer, ForeignKey("users.id"))
     category_id = Column(Integer, ForeignKey("categories.id"))
 
@@ -54,6 +55,7 @@ class Comment(Base):
     id = Column(Integer, primary_key=True, index=True)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     author_id = Column(Integer, ForeignKey("users.id"))
     post_id = Column(Integer, ForeignKey("posts.id"))
 
@@ -65,7 +67,7 @@ class Category(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
-    slug = Column(String, unique=True, nullable=False)
+    slug = Column(String, unique=True, nullable=True)
     
     posts = relationship("Post", back_populates="category")
 

@@ -22,18 +22,14 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str   # hash password later for registration (only at creation)
     
-T = TypeVar("T", bound=UserBase)
-
-class OptionalUModel(UserBase, Generic[T]):
-    @classmethod
-    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        super().__pydantic_init_subclass__(**kwargs)
-        for field_name, field in cls.model_fields.items():
-            field.annotation = Optional[field.annotation]
-            field.default = None
-            
-class UserUpdate(OptionalUModel[UserBase]):
-    pass
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None # Will be hashed if provided
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    bio: Optional[str] = None
+    is_admin: Optional[bool] = None
 
 class UserResponse(UserBase):
     id: int
@@ -50,22 +46,16 @@ class PostBase(BaseModel):
     content: str
     status: PostStatus
     category_id: int
-    
-T = TypeVar("T", bound=PostBase)
-
-class OptionalPModel(PostBase, Generic[T]):
-    @classmethod
-    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        super().__pydantic_init_subclass__(**kwargs)
-        for field_name, field in cls.model_fields.items():
-            field.annotation = Optional[field.annotation]
-            field.default = None
-            
-class PostUpdate(OptionalPModel[PostBase]):
-    pass
 
 class PostCreate(PostBase):
     author_id: int
+
+class PostUpdate(BaseModel):
+    title: Optional[str] = None
+    slug: Optional[str] = None
+    content: Optional[str] = None
+    status: Optional[PostStatus] = None
+    category_id: Optional[int] = None
 
 class PostResponse(PostBase):
     id: int
@@ -84,22 +74,14 @@ class CommentCreate(CommentBase):
     author_id: int
     post_id: int
 
-T = TypeVar("T", bound=CommentBase)
-
-class OptionalCModel(CommentBase, Generic[T]):
-    @classmethod
-    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        super().__pydantic_init_subclass__(**kwargs)
-        for field_name, field in cls.model_fields.items():
-            field.annotation = Optional[field.annotation]
-            field.default = None
-            
-class CommentUpdate(OptionalCModel[CommentBase]):
-    pass
+class CommentUpdate(BaseModel):
+    content: Optional[str] = None
 
 class CommentResponse(CommentBase):
     id: int
     created_at: datetime
+    author_id: int
+    post_id: int
 
     class Config:
         orm_mode = True
@@ -112,18 +94,9 @@ class CategoryBase(BaseModel):
 class CategoryCreate(CategoryBase):
     pass
 
-T = TypeVar("T", bound=CategoryBase)
-
-class OptionalcModel(CategoryBase, Generic[T]):
-    @classmethod
-    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        super().__pydantic_init_subclass__(**kwargs)
-        for field_name, field in cls.model_fields.items():
-            field.annotation = Optional[field.annotation]
-            field.default = None
-            
-class CategoryUpdate(OptionalcModel[CategoryBase]):
-    pass
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
 
 class CategoryResponse(CategoryBase):
     id: int
@@ -137,18 +110,8 @@ class TagBase(BaseModel):
 class TagCreate(TagBase):
     pass
 
-T = TypeVar("T", bound=TagBase)
-
-class OptionalTModel(TagBase, Generic[T]):
-    @classmethod
-    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
-        super().__pydantic_init_subclass__(**kwargs)
-        for field_name, field in cls.model_fields.items():
-            field.annotation = Optional[field.annotation]
-            field.default = None
-            
-class TagUpdate(OptionalTModel[TagBase]):
-    pass
+class TagUpdate(BaseModel):
+    name: Optional[str] = None
 
 class TagResponse(TagBase):
     id: int
