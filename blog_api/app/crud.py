@@ -1,3 +1,4 @@
+# crud.py
 from models import User, Post, Comment, Category, Tag
 from sqlalchemy import select, delete
 from fastapi import HTTPException
@@ -5,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
 from schemas import UserCreate, UserUpdate, PostCreate, PostUpdate, PostStatus, CommentCreate, CommentUpdate, CategoryCreate, CategoryUpdate, TagCreate, TagUpdate, PostTagsUpdate
 from typing import TypeVar, Optional
-from auth import hash_password
+from security import hash_password # Import from the new security file
 
 '''
 Users CRUD

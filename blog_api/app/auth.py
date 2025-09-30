@@ -1,14 +1,15 @@
+# auth.py
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from passlib.context import CryptContext
-from passlib.exc import UnknownHashError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import FastAPI, Query, Security, Depends, HTTPException
-from crud import get_user
+from crud import get_user # Keep this import, as get_current_user needs it
 from database import get_db
 from sqlalchemy.orm import Session
 from models import User
+from security import verify_password # Import from the new security file
+
 
 import os
 
@@ -26,23 +27,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     expire = datetime.utcnow() +  (expires_delta or timedelta(minutes= env_vars['ACCESS_TOKEN_EXPIRE_MINUTES']))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, env_vars['SECRET_KEY'], algorithm=env_vars['ALGORITHM'])
-
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except UnknownHashError:
-        print("Error - hash is unrecognizable: UnknownHashError")
-        return False
-    except Exception as e:
-        # Optional: Log other potential errors from passlib for debugging
-        print(f"An unexpected error occurred during password verification: {e}")
-        return False
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 

@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from schemas import PostUpdate, PostCreate, PostResponse, PostStatus
@@ -16,7 +17,8 @@ from crud import get_post, get_posts, insert_post, update_post, delete_post, ass
 from crud import get_comments, get_comment, insert_comment, update_comment, delete_comment
 from crud import get_categories, get_category, insert_category, update_category, delete_category
 from crud import get_tags, get_tag, insert_tag, update_tag, delete_tag
-from auth import verify_password, create_access_token, hash_password, get_current_user, require_admin
+from auth import create_access_token, get_current_user, require_admin
+from security import verify_password, hash_password # Import from the new security file
 
 
 from database import get_db
