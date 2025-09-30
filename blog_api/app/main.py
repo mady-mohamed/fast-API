@@ -5,13 +5,14 @@ from schemas import UserCreate,  UserUpdate, UserResponse
 from schemas import CommentCreate, CommentUpdate, CommentResponse
 from schemas import CategoryUpdate, CategoryCreate, CategoryResponse
 from schemas import TagUpdate, TagCreate, TagResponse
+from schemas import PostTagsUpdate
 from schemas import Token
 from models import User
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from slugify import slugify
 from typing import Optional
 from crud import get_users, get_user, insert_user, update_user, delete_user
-from crud import get_post, get_posts, insert_post, update_post, delete_post
+from crud import get_post, get_posts, insert_post, update_post, delete_post, assign_tags_to_post, search_tag_posts, search_category_posts, get_post_comments, get_post_author
 from crud import get_comments, get_comment, insert_comment, update_comment, delete_comment
 from crud import get_categories, get_category, insert_category, update_category, delete_category
 from crud import get_tags, get_tag, insert_tag, update_tag, delete_tag
@@ -92,6 +93,18 @@ def create_post(post: PostCreate, db: Session = Depends(get_db), current_user: U
 @app.get("/posts/{post_id}", response_model=PostResponse, tags=["Posts"], summary="Get a single post by post ID")
 def get_single_post(post_id: int, db: Session = Depends(get_db)):
     return get_post(db, post_id)
+@app.get("/posts/search/tags", response_model=list[PostResponse], tags=["Posts"], summary="Retrieve posts by filtering on a list of tag IDs")
+def get_posts_by_tags(
+    tag_ids: list[int] = Depends(lambda ids: ids), # FastAPI will automatically parse 'tag_ids=1&tag_ids=3' into a list[int]
+    db: Session = Depends(get_db)
+):
+    return search_tag_posts(db, tag_ids)
+@app.get("/posts/search/category", response_model=list[PostResponse], tags=["Posts"], summary="Retrieve posts by filtering on a list of category IDs")
+def get_posts_by_categories(
+    category_ids: list[int] = Depends(lambda ids: ids),
+    db: Session = Depends(get_db)
+):
+    return search_category_posts(db, category_ids)
 @app.put("/posts/{post_id}", response_model=PostResponse, tags=["Posts"], summary="Update an existing post's data")
 def change_post_data(post_id: int, update: PostUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post_to_update = get_post(db, post_id)
@@ -118,6 +131,41 @@ def list_posts(
 ):
     # Pass the new status parameter to the CRUD function
     return get_posts(db, skip=skip, limit=limit, status=status)
+@app.patch(
+            "/posts/{post_id}/tags", 
+           response_model=PostResponse, 
+           tags=["Posts"], 
+           summary="Assign or replace all tags for a post"
+           )
+def set_post_tags(
+    post_id: int, 
+    tags_update: PostTagsUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    post_to_update = get_post(db, post_id)
+    if post_to_update.author_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized to update tags for this post")
+    updated_post = assign_tags_to_post(db, post_id, tags_update)
+    db.commit()
+    db.refresh(updated_post)
+    
+    return updated_post
+
+@app.get("/posts/{post_id}/comments", response_model=list[CommentResponse], tags=["Comments"], summary="Retrieve all comments for a specific post")
+def list_post_comments(
+    post_id: int, 
+    db: Session = Depends(get_db)
+):
+    return get_post_comments(db, post_id)
+
+@app.get("/posts/{user_id}", response_model=list[PostResponse], tags=["Posts"], summary="Retrieve all posts by a specific user.")
+def list_comments_post(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    return get_post_author(db, user_id)
+
 '''
 Comments Endpoints
 '''

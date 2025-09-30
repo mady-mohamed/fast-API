@@ -3,7 +3,7 @@ from sqlalchemy import select, delete
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
-from schemas import UserCreate, UserUpdate, PostCreate, PostUpdate, PostStatus, CommentCreate, CommentUpdate, CategoryCreate, CategoryUpdate, TagCreate, TagUpdate
+from schemas import UserCreate, UserUpdate, PostCreate, PostUpdate, PostStatus, CommentCreate, CommentUpdate, CategoryCreate, CategoryUpdate, TagCreate, TagUpdate, PostTagsUpdate
 from typing import TypeVar, Optional
 from auth import hash_password
 
@@ -83,7 +83,28 @@ def update_post(db: Session, post_id: int, post_update: PostUpdate):
         setattr(post, col, updt[col])
     db.flush()
     return post
+
+def assign_tags_to_post(db: Session, post_id: int, tags_update: PostTagsUpdate):
+    post = get_post(db, post_id)
+    tag_objects = [get_tag(db, id) for id in tags_update.tag_ids]
+    post.tags = tag_objects
+    db.flush()
+    return post
+
+def search_tag_posts(db: Session, tag_ids: list[int]):
+    stmt = select(Post)
+    stmt = stmt.join(Post.tags) 
+    stmt = stmt.where(Tag.id.in_(tag_ids))
+    stmt = stmt.distinct()
+    return db.execute(stmt).scalars().all()
     
+def search_category_posts(db: Session, category_ids: list[int]):
+    stmt = select(Post)
+    stmt = stmt.join(Post.category) 
+    stmt = stmt.where(Category.id.in_(category_ids))
+    stmt = stmt.distinct()
+    return db.execute(stmt).scalars().all()
+
 def delete_post(db: Session, post_id: int):
     post_to_delete = get_post(db, post_id)
     db.delete(post_to_delete)
@@ -130,6 +151,7 @@ def delete_comment(db: Session, comment_id: int):
     db.flush()
     return comment_to_delete
     
+
 '''
 Categories CRUD
 '''
@@ -160,6 +182,15 @@ def update_category(db: Session, category_id: int, category_update: CategoryUpda
     db.flush()
     
     return category
+
+def get_post_comments(db: Session, post_id: int):
+    stmt = select(Comment).where(Comment.post_id == post_id)
+    return db.execute(stmt).scalars().all()
+
+def get_post_author(db: Session, author_id: int):
+    stmt = select(Post).where(Post.author_id == author_id)
+    return db.execute(stmt).scalars().all()
+
 def delete_category(db: Session, category_id: int):
     category_to_delete = get_category(db, category_id)
     db.delete(category_to_delete)

@@ -118,3 +118,10 @@ class TagResponse(TagBase):
     name: str
     class Config:
         orm_mode = True
+
+'''
+Relational Schemas
+'''
+
+class PostTagsUpdate(BaseModel):
+    tag_ids: list[int]
