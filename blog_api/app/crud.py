@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
 from schemas import UserCreate, UserUpdate, PostCreate, PostUpdate, PostStatus, CommentCreate, CommentUpdate, CategoryCreate, CategoryUpdate, TagCreate, TagUpdate
 from typing import TypeVar, Optional
+from auth import hash_password
 
 '''
 Users CRUD
@@ -33,6 +34,9 @@ def get_user(db: Session, username: str) -> User:
 def update_user(db: Session, username: str, user_update:UserUpdate):
     user = get_user(db, username)
     updt = user_update.model_dump(exclude_unset=True)
+    if "password" in updt and updt["password"]:
+        updt["password_hash"] = hash_password(updt.pop("password"))
+
     for col in updt:
         setattr(user, col, updt[col])
     db.flush()

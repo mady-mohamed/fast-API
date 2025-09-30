@@ -22,11 +22,11 @@ from database import get_db
 
 app = FastAPI(title="Blog API")
 
-@app.get("/")
+@app.get("/", tags=["General"], summary="API Status Check")
 def read_root():
     return {"message": "Welcome to Blog API"}
 
-@app.post("/login", response_model=Token)
+@app.post("/login", response_model=Token, tags=["Authentication"], summary="User Login & Token Generation")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = get_user(db, form_data.username)
     if not verify_password(form_data.password, user.password_hash):
@@ -61,6 +61,7 @@ def change_user_data(username: str, update: UserUpdate, db: Session = Depends(ge
         raise HTTPException(status_code=403, detail="Not authorized to update this user")
     new_user = update_user(db, username, update)
     db.commit()
+    db.refresh(new_user)
     return new_user
 @app.delete("/users/{username}", response_model=UserResponse, tags=["Users"], summary="Delete a user by username")
 def remove_user(username: str, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
@@ -85,21 +86,22 @@ def create_post(post: PostCreate, db: Session = Depends(get_db), current_user: U
     update_data = PostUpdate(slug=unique_slug)
     updated_post = update_post(db, new_post.id, update_data)
     db.commit()
-    db.refresh(new_post)
+    db.refresh(updated_post)
     return updated_post
 
 @app.get("/posts/{post_id}", response_model=PostResponse, tags=["Posts"], summary="Get a single post by post ID")
 def get_single_post(post_id: int, db: Session = Depends(get_db)):
     return get_post(db, post_id)
-@app.put("/posts/{post_id}", response_model=PostResponse)
+@app.put("/posts/{post_id}", response_model=PostResponse, tags=["Posts"], summary="Update an existing post's data")
 def change_post_data(post_id: int, update: PostUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post_to_update = get_post(db, post_id)
     if post_to_update.author_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized to update this post")
     updated_post = update_post(db, post_id, update)
     db.commit()
+    db.refresh(updated_post)
     return updated_post
-@app.delete("/posts/{post_id}", response_model=PostResponse)
+@app.delete("/posts/{post_id}", response_model=PostResponse, tags=["Posts"], summary="Delete a post by its ID")
 def remove_post(post_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     post_to_delete = get_post(db, post_id)
     if post_to_delete.author_id != current_user.id and not current_user.is_admin:
@@ -107,7 +109,7 @@ def remove_post(post_id: int, db: Session = Depends(get_db), current_user: User 
     deleted_post = delete_post(db, post_id)
     db.commit()
     return deleted_post
-@app.get("/posts/", response_model=list[PostResponse])
+@app.get("/posts/", response_model=list[PostResponse], tags=["Posts"], summary="Retrieve a list of posts with pagination and optional filtering")
 def list_posts(
     skip: int = 0, 
     limit: int = 10, 
@@ -119,25 +121,26 @@ def list_posts(
 '''
 Comments Endpoints
 '''
-@app.post("/comments/", response_model=CommentResponse)
+@app.post("/comments/", response_model=CommentResponse, tags=["Comments"], summary="Create a new comment")
 def create_comment(comment: CommentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     comment.author_id = current_user.id
     new_comment = insert_comment(db, comment)
     db.commit()
     db.refresh(new_comment)
     return new_comment
-@app.get("/comments/{comment_id}", response_model=CommentResponse)
+@app.get("/comments/{comment_id}", response_model=CommentResponse, tags=["Comments"], summary="Get a single comment by its ID")
 def get_single_comment(comment_id: int, db: Session = Depends(get_db)):
     return get_comment(db, comment_id)
-@app.put("/comments/{comment_id}", response_model=CommentResponse)
+@app.put("/comments/{comment_id}", response_model=CommentResponse, tags=["Comments"], summary="Update a comment's data")
 def change_comment_data(comment_id: int, update: CommentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     comment_to_update = get_comment(db, comment_id)
     if comment_to_update.author_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not authorized to update this comment")
     updated_comment = update_comment(db, comment_id, update)
     db.commit()
+    db.refresh(updated_comment)
     return updated_comment
-@app.delete("/comments/{comment_id}", response_model=CommentResponse)
+@app.delete("/comments/{comment_id}", response_model=CommentResponse, tags=["Comments"], summary="Delete a comment")
 def remove_comment(comment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     comment_to_delete = get_comment(db, comment_id)
     if comment_to_delete.author_id != current_user.id and not current_user.is_admin:
@@ -145,13 +148,13 @@ def remove_comment(comment_id: int, db: Session = Depends(get_db), current_user:
     deleted_comment = delete_comment(db, comment_id)
     db.commit()
     return deleted_comment
-@app.get("/comments/", response_model=list[CommentResponse])
+@app.get("/comments/", response_model=list[CommentResponse], tags=["Comments"], summary="List all comments")
 def list_comments(db: Session = Depends(get_db)):
     return get_comments(db)
 '''
 Categories Endpoints
 '''
-@app.post("/categories/", response_model=CategoryResponse)
+@app.post("/categories/", response_model=CategoryResponse, tags=["Categories"], summary="Create a category")
 def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
     new_category = insert_category(db, category)
     original_slug = category.slug if category.slug else slugify(category.name)
@@ -161,44 +164,46 @@ def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_category)
     return new_category
-@app.get("/categories/{category_id}", response_model=CategoryResponse)
+@app.get("/categories/{category_id}", response_model=CategoryResponse, tags=["Categories"], summary="Get a single category by its ID")
 def get_single_category(category_id: int, db: Session = Depends(get_db)):
     return get_category(db, category_id)
-@app.put("/categories/{category_id}")
+@app.put("/categories/{category_id}", response_model=CategoryResponse, tags=["Categories"], summary="Update a category's data")
 def change_category_data(category_id: int, update: CategoryUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     updated_category = update_category(db, category_id, update)
     db.commit()
+    db.refresh(updated_category)
     return updated_category
-@app.delete("/categories/{category_id}", response_model=CategoryResponse)
+@app.delete("/categories/{category_id}", response_model=CategoryResponse, tags=["Categories"], summary="Remove a category")
 def remove_category(category_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     deleted_category = delete_category(db, category_id)
     db.commit()
     return deleted_category
-@app.get("/categories/", response_model=list[CategoryResponse])
+@app.get("/categories/", response_model=list[CategoryResponse], tags=["Categories"], summary="List all categories")
 def list_categories(db: Session = Depends(get_db)):
     return get_categories(db)
 '''
 Tags Endpoints
 '''
-@app.post("/tags/", response_model=TagResponse)
+@app.post("/tags/", response_model=TagResponse, tags=["Tags"], summary="Create a tag")
 def create_tag(tag: TagCreate, db: Session = Depends(get_db)):
     new_tag = insert_tag(db, tag)
     db.commit()
     db.refresh(new_tag)
     return new_tag
-@app.get("/tags/{tag_id}", response_model=TagResponse)
+@app.get("/tags/{tag_id}", response_model=TagResponse, tags=["Tags"], summary="Get a tag by its ID")
 def get_single_tag(tag_id: int, db: Session = Depends(get_db)):
     return get_tag(db, tag_id)
-@app.put("/tags/{tag_id}", response_model=TagResponse)
+@app.put("/tags/{tag_id}", response_model=TagResponse, tags=["Tags"], summary="Update a tag's data")
 def change_tag_data(tag_id: int, update: TagUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     updated_tag = update_tag(db, tag_id, update)
     db.commit()
+    db.refresh(updated_tag)
     return updated_tag
-@app.delete("/tags/{tag_id}", response_model=TagResponse)
+@app.delete("/tags/{tag_id}", response_model=TagResponse, tags=["Tags"], summary="Delete a tag")
 def remove_tag(tag_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     tag = delete_tag(db, tag_id)
     db.commit()
     return tag
-@app.get("/tags/", response_model=list[TagResponse])
+@app.get("/tags/", response_model=list[TagResponse], tags=["Tags"], summary="List all tags")
 def list_tags(db: Session = Depends(get_db)):
     return get_tags(db)
